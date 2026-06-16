@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>区域选择</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      cursor: crosshair;
+      user-select: none;
+      background: transparent;
+    }
+
+    /* 半透明遮罩 */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.35);
+      pointer-events: none;
+    }
+
+    /* 框选区域（挖空） */
+    .selection {
+      position: fixed;
+      border: 2px solid #cc7d7d;
+      background: rgba(254, 243, 234, 0.15);
+      display: none;
+      pointer-events: none;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+    }
+
+    /* 提示文字 */
+    .hint {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #fef3ea;
+      font-family: "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+      background: rgba(0,0,0,0.5);
+      padding: 8px 20px;
+      border-radius: 20px;
+      pointer-events: none;
+      z-index: 10;
+      backdrop-filter: blur(4px);
+    }
+
+    /* 尺寸标签 */
+    .size-label {
+      position: fixed;
+      display: none;
+      background: rgba(0,0,0,0.7);
+      color: #fef3ea;
+      font-family: "Consolas", "Microsoft YaHei", monospace;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 8px;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="hint">🖱️ 拖拽框选截屏区域，按 <b>ESC</b> 取消</div>
+  <div class="overlay" id="overlay"></div>
+  <div class="selection" id="selection"></div>
+  <div class="size-label" id="sizeLabel"></div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    const selection = document.getElementById('selection');
+    const sizeLabel = document.getElementById('sizeLabel');
+    const hint = document.querySelector('.hint');
+
+    let startX = 0, startY = 0;
+    let isDragging = false;
+
+    document.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return; // 只响应左键
+      startX = e.screenX;
+      startY = e.screenY;
+      isDragging = true;
+      selection.style.display = 'block';
+      sizeLabel.style.display = 'block';
+      hint.style.display = 'none';
+      updateRect(e);
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      updateRect(e);
+    });
+
+    document.addEventListener('mouseup', (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+
+      const x = Math.min(startX, e.screenX);
+      const y = Math.min(startY, e.screenY);
+      const w = Math.abs(e.screenX - startX);
+      const h = Math.abs(e.screenY - startY);
+
+      // 框选太小（< 20px）视为无效
+      if (w < 20 || h < 20) {
+        resetSelection();
+        return;
+      }
+
+      // 发送选中区域给主进程
+      ipcRenderer.send('region:selected', { x, y, width: w, height: h });
+    });
+
+    function updateRect(e) {
+      const x = Math.min(startX, e.screenX);
+      const y = Math.min(startY, e.screenY);
+      const w = Math.abs(e.screenX - startX);
+      const h = Math.abs(e.screenY - startY);
+
+      selection.style.left = x + 'px';
+      selection.style.top = y + 'px';
+      selection.style.width = w + 'px';
+      selection.style.height = h + 'px';
+
+      sizeLabel.style.left = (x + w / 2) + 'px';
+      sizeLabel.style.top = (y - 28) + 'px';
+      sizeLabel.style.transform = 'translate(-50%, 0)';
+      sizeLabel.textContent = `${w} × ${h}`;
+    }
+
+    function resetSelection() {
+      selection.style.display = 'none';
+      sizeLabel.style.display = 'none';
+      hint.style.display = 'block';
+      isDragging = false;
+    }
+
+    // ESC 取消
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        ipcRenderer.send('region:cancelled');
+      }
+    });
+  </script>
+</body>
+</html>

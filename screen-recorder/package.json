@@ -1,0 +1,22 @@
+{
+  "name": "screen-recorder",
+  "version": "1.0.0",
+  "description": "截屏识字幕 - 可爱风 Windows 录屏软件",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "start:win": "start.bat",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "screen-recorder",
+    "screenshot",
+    "subtitle"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^31.7.7"
+  }
+}

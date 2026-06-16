@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+  <title>🎀 截屏识字幕</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- ========== 标题栏 ========== -->
+    <header class="app-header">
+      <div class="app-logo">
+        <span class="logo-icon">🎀</span>
+        <span>截屏识字幕</span>
+      </div>
+      <div class="header-actions">
+        <span style="font-size:12px; opacity:0.4;">v1.0.0</span>
+      </div>
+    </header>
+
+    <!-- ========== 控制面板 ========== -->
+    <section class="control-panel">
+      <!-- 音源开关（截屏模式时隐藏） -->
+      <div class="audio-toggles" id="audioToggles">
+        <label class="toggle-group">
+          <span class="toggle-label">
+            <span class="emoji">🎤</span> 麦克风
+          </span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="micToggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </label>
+        <label class="toggle-group">
+          <span class="toggle-label">
+            <span class="emoji">🔊</span> 系统声音
+          </span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="sysAudioToggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </label>
+      </div>
+
+      <!-- 模式选择 -->
+      <div class="mode-selector">
+        <label class="mode-option active" data-mode="fullscreen">
+          <span class="mode-radio"></span>
+          <span>🖥️ 全屏</span>
+        </label>
+        <label class="mode-option" data-mode="region">
+          <span class="mode-radio"></span>
+          <span>✂️ 区域框选</span>
+        </label>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div class="action-buttons">
+        <button class="btn btn-primary" id="btnRecord">
+          <span class="btn-icon">🔴</span>
+          <span>开始录屏</span>
+        </button>
+        <button class="btn btn-screenshot" id="btnScreenshot">
+          <span class="btn-icon">📸</span>
+          <span>一键截屏</span>
+        </button>
+      </div>
+
+      <!-- 录制计时器（默认隐藏） -->
+      <div class="recording-timer" id="recordingTimer">
+        <span class="recording-dot"></span>
+        <span id="timerDisplay">00:00</span>
+      </div>
+    </section>
+
+    <!-- ========== 内容区 ========== -->
+    <section class="content-area">
+      <!-- 筛选标签 -->
+      <div class="filter-tabs">
+        <button class="filter-tab active" data-filter="all">
+          📂 全部 <span class="count" id="countAll">0</span>
+        </button>
+        <button class="filter-tab" data-filter="video">
+          📹 视频 <span class="count" id="countVideo">0</span>
+        </button>
+        <button class="filter-tab" data-filter="screenshot">
+          🖼️ 截图 <span class="count" id="countScreenshot">0</span>
+        </button>
+      </div>
+
+      <!-- 文件列表 -->
+      <div class="file-list" id="fileList">
+        <!-- 空状态 -->
+        <div class="empty-state" id="emptyState">
+          <span class="empty-icon">📭</span>
+          <span class="empty-text">还没有任何文件哦～</span>
+          <span style="font-size:12px;">点击上方按钮开始录屏或截屏吧 ✨</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ========== 右键菜单（隐藏） ========== -->
+  <div class="context-menu-overlay" id="contextOverlay"></div>
+  <div class="context-menu" id="contextMenu">
+    <button class="context-menu-item" data-action="pin">
+      📌 <span id="contextPinText">置顶</span>
+    </button>
+    <button class="context-menu-item" data-action="rename">
+      ✏️ 重命名
+    </button>
+    <button class="context-menu-item" data-action="subtitle">
+      💬 生成字幕
+    </button>
+    <button class="context-menu-item" data-action="export-srt">
+      📤 导出字幕
+    </button>
+    <div class="context-menu-divider"></div>
+    <button class="context-menu-item danger" data-action="delete">
+      🗑️ 删除
+    </button>
+  </div>
+
+  <!-- ========== 重命名弹窗（隐藏） ========== -->
+  <div class="modal-overlay" id="renameModal">
+    <div class="modal">
+      <div class="modal-title">✏️ 重命名</div>
+      <div class="modal-body">请输入新的文件名：</div>
+      <input type="text" class="modal-input" id="renameInput" maxlength="100">
+      <div class="modal-actions">
+        <button class="btn-sm btn-cancel" id="btnRenameCancel">取消</button>
+        <button class="btn-sm btn-danger" id="btnRenameConfirm">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 删除确认弹窗（隐藏） ========== -->
+  <div class="modal-overlay" id="deleteModal">
+    <div class="modal">
+      <div class="modal-title">🗑️ 确认删除</div>
+      <div class="modal-body" id="deleteMessage">确定要删除这个文件吗？此操作不可恢复。</div>
+      <div class="modal-actions">
+        <button class="btn-sm btn-cancel" id="btnDeleteCancel">取消</button>
+        <button class="btn-sm btn-danger" id="btnDeleteConfirm">确认删除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 字幕进度弹窗（隐藏） ========== -->
+  <div class="modal-overlay" id="subtitleModal">
+    <div class="modal">
+      <div class="modal-title">💬 生成字幕</div>
+      <div class="modal-body">
+        <p style="margin-bottom:12px;">正在识别语音，请稍候...</p>
+        <div style="height:6px; background:var(--color-highlight); border-radius:3px; overflow:hidden;">
+          <div id="subtitleProgress" style="height:100%; width:0%; background:var(--color-accent); border-radius:3px; transition: width 0.3s;"></div>
+        </div>
+        <p style="font-size:11px; margin-top:8px; opacity:0.5;" id="subtitleProgressText">准备中...</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm btn-cancel" id="btnSubtitleCancel">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

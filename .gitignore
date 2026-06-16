@@ -1,0 +1,27 @@
+# Node.js
+node_modules/
+
+# Electron
+screen-recorder/node_modules/
+
+# Binary executables (too large for git)
+screen-recorder/bin/*.exe
+screen-recorder/bin/*.dll
+screen-recorder/bin/*.zip
+
+# AI models (huge files)
+screen-recorder/models/*.bin
+screen-recorder/models/*.gguf
+
+# Build output
+screen-recorder/dist/
+screen-recorder/out/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.tmp
+
+# IDE
+.vscode/
+.idea/
