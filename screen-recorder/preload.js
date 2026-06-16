@@ -26,8 +26,8 @@ contextBridge.exposeInMainWorld('api', {
   openFile: (id) =>
     ipcRenderer.invoke('files:openFile', id),
 
-  exportSrt: (id) =>
-    ipcRenderer.invoke('dialog:exportSrt', id),
+  exportSubtitle: (id, format) =>
+    ipcRenderer.invoke('dialog:exportSubtitle', { id, format }),
 
   // ===== 音频设备 =====
   getAudioDevices: () =>

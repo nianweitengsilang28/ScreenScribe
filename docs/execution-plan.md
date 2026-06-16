@@ -224,18 +224,18 @@
 
 | 步骤 | 内容 | 关键文件 |
 |------|------|----------|
-| 9.1 | 配置 electron-builder | `electron-builder.yml` |
-| 9.2 | 配置 extraResources（FFmpeg, whisper, 模型）| `electron-builder.yml` |
-| 9.3 | 制作应用图标（可爱风）| `assets/icons/` |
-| 9.4 | 打包 Windows NSIS 安装包 | `npm run build` |
-| 9.5 | 测试安装包（全新环境）| — |
+| 9.1 | ~~配置 electron-builder~~ ✅ | `package.json` build 字段 |
+| 9.2 | ~~配置 extraResources~~ ✅ | bin/ + models/ → resources/ |
+| 9.3 | ~~制作应用图标~~ ✅ | 256x256 粉色圆角 PNG |
+| 9.4 | ~~打包 NSIS 安装包~~ ✅ | `dist/截屏识字幕 Setup 1.0.0.exe` |
+| 9.5 | 测试安装包（全新环境）| 待用户在另一台电脑验证 |
 | 9.6 | 修复打包相关问题 | — |
 
 **验收标准**：
-- [ ] `npm run build` 成功生成 .exe 安装包
-- [ ] 安装包可在 Windows 10/11 安装运行
-- [ ] 安装后所有功能正常
-- [ ] FFmpeg 和 whisper 随包正确分发
+- [x] `npm run build` 成功生成 .exe 安装包（515MB）
+- [x] 安装包含 FFmpeg、whisper、模型、DLL
+- [x] 支持自定义安装目录、桌面快捷方式
+- [ ] 全新环境安装测试（待用户验证）
 
 ---
 

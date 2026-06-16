@@ -1,22 +1,58 @@
 {
-  "name": "screen-recorder",
+  "name": "ScreenScribe",
   "version": "1.0.0",
   "description": "截屏识字幕 - 可爱风 Windows 录屏软件",
   "main": "main.js",
+  "author": "nianweitengsilang28",
+  "license": "ISC",
+  "type": "commonjs",
   "scripts": {
     "start": "electron .",
     "start:win": "start.bat",
+    "build": "electron-builder",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "build": {
+    "appId": "com.screenscribe.app",
+    "productName": "截屏识字幕",
+    "directories": {
+      "output": "dist"
+    },
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin"
+      },
+      {
+        "from": "models",
+        "to": "models"
+      }
+    ],
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icons/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "截屏识字幕"
+    }
   },
   "keywords": [
     "screen-recorder",
     "screenshot",
     "subtitle"
   ],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "devDependencies": {
-    "electron": "^31.7.7"
+    "electron": "^31.7.7",
+    "electron-builder": "^26.15.3"
   }
 }

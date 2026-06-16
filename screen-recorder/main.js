@@ -230,21 +230,33 @@ function setupIPC() {
     return { success: true };
   });
 
-  ipcMain.handle('dialog:exportSrt', async (_event, id) => {
+  ipcMain.handle('dialog:exportSubtitle', async (_event, { id, format }) => {
     const files = store.getFiles();
     const file = files.find(f => f.id === id);
     if (!file || !file.srtPath) {
-      return { success: false, error: '字幕文件不存在' };
+      return { success: false, error: '字幕文件不存在，请先生成字幕' };
+    }
+
+    const ext = format === 'txt' ? '.txt' : '.srt';
+    const filterName = format === 'txt' ? '文本文件' : '字幕文件';
+
+    // 确定源文件路径
+    const srcPath = format === 'txt'
+      ? file.srtPath.replace(/\.srt$/, '.txt')
+      : file.srtPath;
+
+    if (!fs.existsSync(srcPath)) {
+      return { success: false, error: `${ext} 字幕文件不存在，请重新生成字幕` };
     }
 
     const result = await dialog.showSaveDialog(mainWindow, {
-      title: '导出字幕',
-      defaultPath: file.fileName.replace(path.extname(file.fileName), '.srt'),
-      filters: [{ name: '字幕文件', extensions: ['srt'] }]
+      title: `导出${ext.toUpperCase()}字幕`,
+      defaultPath: file.fileName.replace(path.extname(file.fileName), ext),
+      filters: [{ name: filterName, extensions: [format] }]
     });
 
     if (!result.canceled && result.filePath) {
-      fs.copyFileSync(file.srtPath, result.filePath);
+      fs.copyFileSync(srcPath, result.filePath);
       return { success: true, exportPath: result.filePath };
     }
     return { success: false, canceled: true };

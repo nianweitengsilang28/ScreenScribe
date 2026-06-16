@@ -17,6 +17,9 @@ screen-recorder/models/*.gguf
 screen-recorder/dist/
 screen-recorder/out/
 
+# Test output
+screen-recorder/test-output/
+
 # OS files
 .DS_Store
 Thumbs.db

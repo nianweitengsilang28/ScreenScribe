@@ -59,17 +59,20 @@ function showContextMenu(x, y, fileId) {
   $('#contextPinText').textContent = file.isPinned ? '取消置顶' : '📌 置顶';
 
   const subItem = contextMenu.querySelector('[data-action="subtitle"]');
-  const exportItem = contextMenu.querySelector('[data-action="export-srt"]');
+  const exportSrtItem = contextMenu.querySelector('[data-action="export-srt"]');
+  const exportTxtItem = contextMenu.querySelector('[data-action="export-txt"]');
   if (file.type === 'screenshot') {
     subItem.style.display = 'none';
-    exportItem.style.display = 'none';
+    exportSrtItem.style.display = 'none';
+    exportTxtItem.style.display = 'none';
   } else {
     subItem.style.display = 'flex';
-    exportItem.style.display = file.hasSubtitle ? 'flex' : 'none';
+    exportSrtItem.style.display = file.hasSubtitle ? 'flex' : 'none';
+    exportTxtItem.style.display = file.hasSubtitle ? 'flex' : 'none';
   }
 
   const menuW = 160;
-  const menuH = file.type === 'screenshot' ? 152 : 216;
+  const menuH = file.type === 'screenshot' ? 152 : 260;
   const maxX = window.innerWidth - menuW - 8;
   const maxY = window.innerHeight - menuH - 8;
   contextMenu.style.left = Math.min(x, maxX) + 'px';
@@ -97,7 +100,8 @@ contextMenu.querySelectorAll('.context-menu-item').forEach(item => {
       case 'rename':    showRenameModal(fileId);  break;
       case 'delete':    showDeleteModal(fileId);  break;
       case 'subtitle':  generateSubtitle(fileId); break;
-      case 'export-srt': exportSrt(fileId);       break;
+      case 'export-srt': exportSubtitle(fileId, 'srt');  break;
+      case 'export-txt': exportSubtitle(fileId, 'txt');  break;
     }
   });
 });
@@ -213,10 +217,10 @@ async function generateSubtitle(fileId) {
   }
 }
 
-async function exportSrt(fileId) {
-  const result = await window.api.exportSrt(fileId);
+async function exportSubtitle(fileId, format) {
+  const result = await window.api.exportSubtitle(fileId, format);
   if (result.success) {
-    alert('📤 字幕已导出到：' + result.exportPath);
+    alert(`📤 ${format.toUpperCase()} 字幕已导出到：` + result.exportPath);
   } else if (!result.canceled) {
     alert('导出失败：' + result.error);
   }
