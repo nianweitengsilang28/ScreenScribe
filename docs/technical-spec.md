@@ -191,10 +191,20 @@ ffmpeg -i input.mp4 -vn -acodec pcm_s16le -ar 16000 -ac 1 output.wav
 ```
 
 ## Whisper 命令参考
+
 ```bash
-whisper.exe -m models/ggml-small.bin -f audio.wav -osrt -of output
+# 音频提取（视频 → WAV 16kHz mono）
+ffmpeg -i input.mp4 -vn -acodec pcm_s16le -ar 16000 -ac 1 output.wav
+
+# 语音识别（WAV → SRT 字幕）
+whisper-cli.exe -m models/ggml-small.bin -f audio.wav -osrt -of output -l zh
 # 生成 output.srt
 ```
+
+### 依赖 DLL
+`whisper-cli.exe` 运行时需要以下 DLL：
+- `whisper.dll` — whisper 核心库
+- `ggml.dll`, `ggml-base.dll`, `ggml-cpu.dll` — GGML 推理后端
 
 ## 文件存储
 

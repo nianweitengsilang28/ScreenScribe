@@ -179,31 +179,38 @@ async function togglePin(fileId) {
 
 // ===== 字幕操作 =====
 async function generateSubtitle(fileId) {
-  // 阶段 8 实现真实识别，这里模拟
   showModal('#subtitleModal');
   const bar = $('#subtitleProgress');
   const text = $('#subtitleProgressText');
   text.textContent = '正在提取音频...';
   bar.style.width = '0%';
 
-  let progress = 0;
-  const interval = setInterval(() => {
-    progress += Math.random() * 15;
-    if (progress >= 100) {
-      progress = 100;
-      clearInterval(interval);
+  // 监听进度
+  window.api.onSubtitleProgress((data) => {
+    if (data.stage === 'extracting') {
+      text.textContent = '正在提取音频...';
+      bar.style.width = Math.min(data.percent, 15) + '%';
+    } else if (data.stage === 'transcribing') {
+      text.textContent = '正在识别语音（可能需要几分钟）...';
+      bar.style.width = (15 + Math.min(data.percent, 85)) + '%';
+    } else if (data.stage === 'done') {
       text.textContent = '✅ 字幕生成完成！';
-      const file = state.files.find(f => f.id === fileId);
-      if (file) file.hasSubtitle = true;
-      setTimeout(async () => {
-        hideModal('#subtitleModal');
-        await loadFiles();
-      }, 800);
-    } else if (progress > 50) {
-      text.textContent = '正在识别语音...';
+      bar.style.width = '100%';
     }
-    bar.style.width = Math.min(progress, 100) + '%';
-  }, 400);
+  });
+
+  const result = await window.api.generateSubtitle(fileId);
+  window.api.removeSubtitleListener();
+
+  if (result.success) {
+    setTimeout(async () => {
+      hideModal('#subtitleModal');
+      await loadFiles();
+    }, 1000);
+  } else {
+    bar.style.width = '0%';
+    text.textContent = '❌ ' + result.error;
+  }
 }
 
 async function exportSrt(fileId) {

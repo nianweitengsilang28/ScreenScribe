@@ -159,11 +159,11 @@
 | 6.5 | 纯视频录制（两路音频全关）| `src/recorder.js` |
 
 **验收标准**：
-- [ ] 打开系统音频 → 录制 → 视频有电脑声音
-- [ ] 打开麦克风 → 录制 → 视频有麦克风声音
-- [ ] 两个都开 → 录制 → 两路声音混合
-- [ ] 两个都关 → 录制 → 视频无声音
-- [ ] 截屏模式下音源开关自动隐藏
+- [x] 打开系统音频 → 录制 → 视频有电脑声音（立体声混音 ✅）
+- [x] 打开麦克风 → 录制 → 视频有麦克风声音 ✅
+- [x] 两个都开 → 录制 → 两路声音混合 ✅
+- [x] 两个都关 → 录制 → 视频无声音 ✅
+- [x] FFmpeg dshow 设备检测 + 自动分类 ✅
 
 ---
 
@@ -199,13 +199,14 @@
 
 | 步骤 | 内容 | 关键文件 |
 |------|------|----------|
-| 8.1 | 下载 whisper.cpp Windows 版 + 模型 | `bin/whisper.exe`, `models/` |
-| 8.2 | 编写 `whisper.js` 模块 | `src/whisper.js` |
-| 8.3 | main.js 注册识别 + 导出 IPC handler | `main.js` |
-| 8.4 | 前端字幕生成按钮 + 进度条 | `src/index.html` + `renderer.js` |
-| 8.5 | 音频提取（FFmpeg）→ 语音识别（whisper）→ SRT 生成 | `src/whisper.js` |
-| 8.6 | 字幕导出按钮（另存为对话框）| IPC `dialog.showSaveDialog()` |
-| 8.7 | 长时间视频的进度回调 | `src/whisper.js` |
+| 8.1 | ~~下载 whisper.cpp Windows 版~~ ✅ | `bin/whisper-cli.exe` + DLLs |
+| 8.2 | ~~编写 `whisper.js` 模块~~ ✅ | `src/whisper.js` |
+| 8.3 | ~~main.js 注册识别 + 导出 IPC handler~~ ✅ | `main.js` |
+| 8.4 | ~~前端字幕生成按钮 + 进度条~~ ✅ | `src/index.html` + `renderer.js` |
+| 8.5 | ~~音频提取 → whisper → SRT 生成~~ ✅ | `src/whisper.js` |
+| 8.6 | ~~字幕导出按钮（另存为对话框）~~ ✅ | IPC `dialog.showSaveDialog()` |
+| 8.7 | ~~进度回调~~ ✅ | `subtitle:progress` IPC 事件 |
+| 8.8 | ⏳ 下载语音模型 | `models/ggml-small.bin` (~460MB) |
 
 **验收标准**：
 - [ ] 选中有声音的视频 → 生成字幕 → 进度条显示 → 完成

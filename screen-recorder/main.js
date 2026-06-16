@@ -6,6 +6,7 @@ const fs = require('fs');
 const screenshot = require('./src/screenshot');
 const recorder = require('./src/recorder');
 const audioDevices = require('./src/audio-devices');
+const whisper = require('./src/whisper');
 const store = require('./src/store');
 
 let mainWindow = null;
@@ -307,7 +308,45 @@ function setupIPC() {
   });
 
   // ---- 语音识别 ----
-  // 阶段 8 实现
+  ipcMain.handle('subtitle:generate', async (event, videoId) => {
+    try {
+      // 检查模型是否就绪
+      if (!whisper.isModelReady()) {
+        return {
+          success: false,
+          error: '未找到语音模型文件！\n\n请下载 ggml-small.bin 到 models/ 目录\n下载地址见下方提示。'
+        };
+      }
+
+      const files = store.getFiles();
+      const file = files.find(f => f.id === videoId);
+      if (!file || file.type !== 'video') {
+        return { success: false, error: '无效的视频文件' };
+      }
+      if (!fs.existsSync(file.filePath)) {
+        return { success: false, error: '视频文件不存在' };
+      }
+
+      // 启动识别（异步，带进度回调）
+      const result = await whisper.generateSubtitle(file.filePath, (percent, stage) => {
+        // 发送进度给渲染进程
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('subtitle:progress', { percent, stage, videoId });
+        }
+      });
+
+      // 更新文件元数据
+      store.updateFile(videoId, {
+        hasSubtitle: true,
+        srtPath: result.srtPath
+      });
+
+      return { success: true, srtPath: result.srtPath };
+    } catch (err) {
+      console.error('字幕生成失败:', err);
+      return { success: false, error: err.message };
+    }
+  });
 }
 
 // ===== 应用生命周期 =====
