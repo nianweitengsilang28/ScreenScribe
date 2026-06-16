@@ -153,21 +153,28 @@ async function transcribe(wavPath, outputBase, onProgress) {
  * @returns {Promise<{srtPath: string}>}
  */
 async function generateSubtitle(videoPath, onProgress) {
-  // 1. 提取音频
   if (onProgress) onProgress(0, 'extracting');
 
   const subtitleDir = getSubtitleDir();
   const baseName = path.basename(videoPath, path.extname(videoPath));
   const wavPath = path.join(subtitleDir, baseName + '.wav');
-  const outputBase = path.join(subtitleDir, baseName);
+  // whisper-cli 的 -of 参数只接受不含扩展名的路径，用正斜杠避免编码问题
+  const outputBase = path.join(subtitleDir, baseName).replace(/\\/g, '/');
+
+  console.log('[字幕] 视频:', videoPath);
+  console.log('[字幕] WAV:', wavPath);
+  console.log('[字幕] 输出:', outputBase);
 
   await extractAudio(videoPath, wavPath);
 
-  // 2. 语音识别
+  if (!fs.existsSync(wavPath)) {
+    throw new Error('音频提取失败：WAV 文件未生成。请确认视频包含声音。');
+  }
+
   const result = await transcribe(wavPath, outputBase, onProgress);
 
-  // 3. 清理临时 WAV（可选：保留用于调试）
-  // fs.unlinkSync(wavPath);
+  // 清理临时 WAV
+  try { fs.unlinkSync(wavPath); } catch (e) {}
 
   return result;
 }

@@ -62,11 +62,11 @@ function buildArgs(params, outPath) {
   }
 
   args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
-    '-pix_fmt', 'yuv420p',           // 兼容所有播放器
-    '-profile:v', 'baseline',        // 浏览器兼容
-    '-level', '3.1',                 // 1080p 级别
-    '-g', '60',                      // 每 2 秒一个关键帧
-    '-movflags', '+faststart');      // moov 前置，浏览器可流式播放
+    '-pix_fmt', 'yuv420p',
+    '-profile:v', 'baseline',
+    '-level', '3.1',
+    '-g', '60',
+    '-movflags', '+faststart');  // moov 前置，浏览器兼容
 
   if (ac > 0) {
     args.push('-c:a', 'aac', '-b:a', '128k');
@@ -123,13 +123,20 @@ function startRecording(params) {
 
     proc.stderr.on('data', (c) => { stderrBuf += c.toString(); });
 
-    // 启动后等 500ms，确认 FFmpeg 没有立即崩溃
+    // 启动后等 1.5s，确认 FFmpeg 真正在写帧（不是空转）
     const earlyCheck = setTimeout(() => {
       if (proc && proc.exitCode === null) {
-        // FFmpeg 还活着，成功
-        resolve({ filePath: fp, fileName: name });
+        // 检查 stderr 是否有帧输出，确认真正在工作
+        if (stderrBuf.includes('frame=') || stderrBuf.length > 500) {
+          resolve({ filePath: fp, fileName: name });
+        } else {
+          // FFmpeg 还活着但没输出 — 可能卡住了
+          console.error('[录屏] 启动后无帧输出, stderr:', stderrBuf.slice(-300));
+          reset();
+          reject(new Error('FFmpeg 启动后无视频输出，请重试'));
+        }
       }
-    }, 500);
+    }, 1500);
 
     proc.on('error', (err) => {
       clearTimeout(earlyCheck);
@@ -139,12 +146,24 @@ function startRecording(params) {
 
     proc.on('close', (code) => {
       clearTimeout(earlyCheck);
-      // 如果是 stopRecording 正常停止，不处理
       if (stopped) return;
 
-      // 意外退出
+      // 意外退出 — 可能 500ms 后立即崩溃
       const errMsg = stderrBuf.slice(-400);
       console.error(`[录屏] 意外退出 (码=${code}):`, errMsg);
+
+      // 通知渲染进程录制异常终止
+      try {
+        const { BrowserWindow } = require('electron');
+        const wins = BrowserWindow.getAllWindows();
+        wins.forEach(w => {
+          if (!w.isDestroyed()) w.webContents.send('recording:crashed', {
+            error: errMsg || `FFmpeg 异常退出 (码=${code})`,
+            filePath: fp
+          });
+        });
+      } catch (e) {}
+
       reset();
     });
   });
@@ -159,50 +178,38 @@ function stopRecording() {
       return reject(new Error('当前没有在录制'));
     }
 
-    // 已经停了
     if (proc.exitCode !== null) {
       const dur = Math.round((Date.now() - startTime) / 1000);
       const fp = filePath;
-      const fn = path.basename(fp);
       reset();
-      return resolve({ filePath: fp, fileName: fn, duration: dur });
+      return resolve({ filePath: fp, fileName: path.basename(fp), duration: dur });
     }
 
     stopped = true;
     const fp = filePath;
-    const fn = path.basename(fp);
     const dur = Math.round((Date.now() - startTime) / 1000);
 
-    // 超时强制杀
-    const force = setTimeout(() => {
-      if (proc) {
-        try { proc.kill('SIGKILL'); } catch (e) {}
-      }
-      const f = filePath || fp;
-      reset();
-      resolve({ filePath: f, fileName: path.basename(f), duration: dur });
-    }, 8000);
-
-    proc.once('close', () => {
+    const done = () => {
       clearTimeout(force);
       const f = filePath || fp;
       reset();
       resolve({ filePath: f, fileName: path.basename(f), duration: dur });
-    });
+    };
 
-    // 优雅停止
-    try {
-      proc.stdin.write('q\n');
-    } catch (e) {
-      try { proc.kill('SIGTERM'); } catch (e2) {}
-    }
+    // 超时兜底
+    const force = setTimeout(done, 5000);
 
-    // 2 秒后 SIGTERM
+    proc.once('close', done);
+
+    // 先尝试优雅停止
+    try { proc.stdin.write('q\n'); } catch (e) {}
+
+    // 1s 后直接杀（碎片 MP4 不怕）
     setTimeout(() => {
       if (proc && proc.exitCode === null) {
         try { proc.kill('SIGTERM'); } catch (e) {}
       }
-    }, 2000);
+    }, 1000);
   });
 }
 

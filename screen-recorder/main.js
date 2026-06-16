@@ -77,26 +77,6 @@ function createRegionSelector() {
       resizable: false,
       skipTaskbar: true,
       webPreferences: {
-        preload: path.join(__dirname, 'preload.js'),
-        contextIsolation: true,
-        nodeIntegration: false
-      }
-    });
-
-    // 允许 region-selector.html 使用 nodeIntegration（需要 ipcRenderer）
-    // 重新创建但允许 nodeIntegration
-    regionWindow.close();
-    regionWindow = new BrowserWindow({
-      x: minX,
-      y: minY,
-      width: maxX - minX,
-      height: maxY - minY,
-      transparent: true,
-      frame: false,
-      alwaysOnTop: true,
-      resizable: false,
-      skipTaskbar: true,
-      webPreferences: {
         nodeIntegration: true,
         contextIsolation: false
       }
@@ -458,9 +438,9 @@ function setupIPC() {
   // ---- 计时器点击停止 ----
   ipcMain.on('timer:stop', async () => {
     try {
+      const result = await recorder.stopRecording();
       closeRecordingBorder();
       closeRecordingTimer();
-      const result = await recorder.stopRecording();
       const record = store.addFile({
         id: 'vid-' + Date.now(), type: 'video',
         fileName: result.fileName, filePath: result.filePath,
@@ -468,10 +448,15 @@ function setupIPC() {
         isPinned: false, hasSubtitle: false, srtPath: null
       });
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('recording:stoppedByTimer', record);
+        mainWindow.webContents.send('recording:stoppedByTimer', { success: true, record });
       }
     } catch (err) {
       console.error('计时器停止失败:', err);
+      closeRecordingBorder();
+      closeRecordingTimer();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('recording:stoppedByTimer', { success: false, error: err.message });
+      }
     }
   });
 
