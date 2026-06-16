@@ -111,8 +111,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ===== 弹窗管理 =====
-function showModal(id) { $('#' + id).classList.add('visible'); }
-function hideModal(id) { $('#' + id).classList.remove('visible'); }
+function showModal(id) { document.getElementById(id.replace(/^#/, '')).classList.add('visible'); }
+function hideModal(id) { document.getElementById(id.replace(/^#/, '')).classList.remove('visible'); }
 
 $$('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', (e) => {
