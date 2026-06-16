@@ -4,22 +4,47 @@
 
 // ===== 状态 =====
 const state = {
-  mode: 'fullscreen',       // 'fullscreen' | 'region'
+  mode: 'fullscreen',
   micEnabled: false,
   sysAudioEnabled: true,
-  micDevice: null,           // 麦克风设备名
-  sysAudioDevice: null,      // 系统音频环回设备名（可能为 null）
+  micDevice: null,
+  sysAudioDevice: null,
   isRecording: false,
   recordingSeconds: 0,
   recordingTimer: null,
-  currentFilter: 'all',     // 'all' | 'video' | 'screenshot'
+  currentFilter: 'all',
   contextTargetId: null,
-  files: [],                // 从主进程加载的文件列表
+  files: [],
 };
 
 // ===== DOM 工具 =====
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
+
+// ===== 加载遮罩 =====
+function showLoading(text, sub, showQuit) {
+  $('#loadingText').textContent = text || '加载中...';
+  $('#loadingSub').textContent = sub || '';
+  $('#btnForceQuit').style.display = showQuit ? 'inline-block' : 'none';
+  $('#loadingOverlay').classList.add('visible');
+}
+
+function hideLoading() {
+  $('#loadingOverlay').classList.remove('visible');
+}
+
+// 卡死检测：5 秒无响应时显示强制关闭按钮
+let hangTimer = null;
+function resetHangTimer() {
+  if (hangTimer) clearTimeout(hangTimer);
+  $('#btnForceQuit').style.display = 'none';
+  hangTimer = setTimeout(() => {
+    if ($('#loadingOverlay').classList.contains('visible')) {
+      $('#btnForceQuit').style.display = 'inline-block';
+      $('#loadingSub').textContent = '应用可能卡住了，您可以选择等待或强制关闭';
+    }
+  }, 5000);
+}
 
 // ===== 初始化：从主进程加载文件列表 =====
 async function loadFiles() {
@@ -124,18 +149,29 @@ $$('.modal-overlay').forEach(overlay => {
 function showRenameModal(fileId) {
   const file = state.files.find(f => f.id === fileId);
   if (!file) return;
-  $('#renameInput').value = file.fileName;
+  // 只允许改文件名主体，后缀保留
+  const lastDot = file.fileName.lastIndexOf('.');
+  const namePart = lastDot > 0 ? file.fileName.substring(0, lastDot) : file.fileName;
+  const extPart = lastDot > 0 ? file.fileName.substring(lastDot) : '';
+  $('#renameInput').value = namePart;
   $('#renameModal')._fileId = fileId;
+  $('#renameModal')._ext = extPart;
   showModal('#renameModal');
-  setTimeout(() => $('#renameInput').focus(), 100);
+  // 选中文件名部分（不含后缀）
+  setTimeout(() => {
+    $('#renameInput').focus();
+    $('#renameInput').setSelectionRange(0, namePart.length);
+  }, 100);
 }
 
 $('#btnRenameCancel').addEventListener('click', () => hideModal('#renameModal'));
 
 $('#btnRenameConfirm').addEventListener('click', async () => {
   const fileId = $('#renameModal')._fileId;
-  const newName = $('#renameInput').value.trim();
-  if (!newName) return;
+  const ext = $('#renameModal')._ext || '';
+  const inputName = $('#renameInput').value.trim();
+  if (!inputName) return;
+  const newName = inputName + ext;  // 后缀自动补回
   const result = await window.api.renameFile(fileId, newName);
   if (result.success) {
     hideModal('#renameModal');
@@ -183,23 +219,23 @@ async function togglePin(fileId) {
 
 // ===== 字幕操作 =====
 async function generateSubtitle(fileId) {
-  showModal('#subtitleModal');
-  const bar = $('#subtitleProgress');
-  const text = $('#subtitleProgressText');
-  text.textContent = '正在提取音频...';
-  bar.style.width = '0%';
+  hideContextMenu();
+  showLoading('正在提取音频...', '准备识别引擎', true);
+  resetHangTimer();
 
   // 监听进度
   window.api.onSubtitleProgress((data) => {
+    resetHangTimer();
     if (data.stage === 'extracting') {
-      text.textContent = '正在提取音频...';
-      bar.style.width = Math.min(data.percent, 15) + '%';
+      $('#loadingText').textContent = '正在提取音频...';
+      $('#loadingSub').textContent = '从视频中分离声音';
     } else if (data.stage === 'transcribing') {
-      text.textContent = '正在识别语音（可能需要几分钟）...';
-      bar.style.width = (15 + Math.min(data.percent, 85)) + '%';
+      $('#loadingText').textContent = '正在识别语音...';
+      $('#loadingSub').textContent = '可能需要几分钟，请耐心等待';
     } else if (data.stage === 'done') {
-      text.textContent = '✅ 字幕生成完成！';
-      bar.style.width = '100%';
+      $('#loadingText').textContent = '✅ 字幕生成完成！';
+      $('#loadingSub').textContent = '';
+      $('#btnForceQuit').style.display = 'none';
     }
   });
 
@@ -208,12 +244,12 @@ async function generateSubtitle(fileId) {
 
   if (result.success) {
     setTimeout(async () => {
-      hideModal('#subtitleModal');
+      hideLoading();
       await loadFiles();
-    }, 1000);
+    }, 800);
   } else {
-    bar.style.width = '0%';
-    text.textContent = '❌ ' + result.error;
+    hideLoading();
+    alert('字幕生成失败：' + result.error);
   }
 }
 
@@ -497,10 +533,33 @@ $('#sysAudioToggle').addEventListener('change', () => {
   state.sysAudioEnabled = $('#sysAudioToggle').checked;
 });
 
+// ===== 计时器点击停止 =====
+window.api.onTimerStop(async (record) => {
+  state.isRecording = false;
+  clearInterval(state.recordingTimer);
+  state.recordingTimer = null;
+  const btn = $('#btnRecord');
+  btn.querySelector('.btn-icon').textContent = '🔴';
+  btn.querySelector('span:last-child').textContent = '开始录屏';
+  btn.classList.remove('btn-recording');
+  $('#recordingTimer').classList.remove('visible');
+  state.recordingSeconds = 0;
+  updateTimerDisplay();
+  state.files = await window.api.getFiles(state.currentFilter);
+  renderFileList();
+});
+
 // ===== 初始加载 =====
+$('#btnForceQuit').addEventListener('click', () => {
+  window.close();
+});
+
 async function init() {
+  showLoading('正在启动...', '检测音频设备 & 加载文件');
+  resetHangTimer();
   await initAudioDevices();
   await loadFiles();
+  hideLoading();
 }
 init();
 console.log('🎀 截屏识字幕 v1.0.0 — 就绪');

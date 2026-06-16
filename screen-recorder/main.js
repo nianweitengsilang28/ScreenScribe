@@ -11,6 +11,8 @@ const store = require('./src/store');
 
 let mainWindow = null;
 let regionWindow = null;
+let borderWindow = null;   // 录制范围边框
+let timerWindow = null;    // 录制计时器浮窗
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -29,6 +31,24 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+
+  // 关闭主窗口时：先停止录制，再退出
+  mainWindow.on('close', (e) => {
+    if (recorder.isRecording()) {
+      e.preventDefault();
+      recorder.stopRecording().finally(() => {
+        closeRecordingBorder();
+        closeRecordingTimer();
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close();
+      });
+    }
+  });
+
+  mainWindow.on('closed', () => {
+    closeRecordingBorder();
+    closeRecordingTimer();
+    mainWindow = null;
+  });
 }
 
 // ===== 区域选择窗口 =====
@@ -115,6 +135,113 @@ function createRegionSelector() {
   });
 }
 
+// ===== 录制范围边框 =====
+
+function showRecordingBorder(rect) {
+  if (borderWindow) closeRecordingBorder();
+
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const bounds = rect || {
+    x: primaryDisplay.bounds.x,
+    y: primaryDisplay.bounds.y,
+    width: primaryDisplay.bounds.width,
+    height: primaryDisplay.bounds.height
+  };
+
+  const html = `<html><body style="margin:0;overflow:hidden;background:transparent;">
+    <div style="position:fixed;inset:0;
+      border:3px solid #cc7d7d;
+      box-shadow: inset 0 0 0 1px rgba(254,243,234,0.5), 0 0 20px rgba(204,125,125,0.3);
+      pointer-events:none;
+      animation: pulse 2s ease-in-out infinite;"></div>
+    <style>@keyframes pulse{0%,100%{border-color:#cc7d7d}50%{border-color:#f5b4ae}}</style>
+    </body></html>`;
+
+  borderWindow = new BrowserWindow({
+    x: bounds.x, y: bounds.y,
+    width: bounds.width, height: bounds.height,
+    transparent: true, frame: false,
+    alwaysOnTop: true, resizable: false,
+    skipTaskbar: true, focusable: false,
+    webPreferences: { nodeIntegration: false, contextIsolation: true }
+  });
+
+  borderWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  borderWindow.setAlwaysOnTop(true, 'screen-saver');
+  borderWindow.setIgnoreMouseEvents(true); // 点击穿透，不拦截操作
+}
+
+function closeRecordingBorder() {
+  if (borderWindow && !borderWindow.isDestroyed()) {
+    borderWindow.close();
+    borderWindow = null;
+  }
+}
+
+// ===== 录制计时器浮窗 =====
+let timerStartTime = 0;
+
+function showRecordingTimer(rect) {
+  if (timerWindow) closeRecordingTimer();
+
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const area = rect || {
+    x: primaryDisplay.bounds.x, y: primaryDisplay.bounds.y,
+    width: primaryDisplay.bounds.width, height: primaryDisplay.bounds.height
+  };
+
+  timerStartTime = Date.now();
+
+  // 写入临时文件以启用 nodeIntegration
+  const tmpHtml = path.join(app.getPath('temp'), 'screenscribe-timer.html');
+  fs.writeFileSync(tmpHtml, `<html><body style="margin:0;overflow:hidden;background:transparent;
+      display:flex;align-items:center;justify-content:flex-start;padding:8px 12px;
+      font-family:Consolas,monospace;cursor:pointer;">
+    <div id="box" title="点击停止录屏" style="background:rgba(25,100,92,0.88);padding:6px 14px;
+      border-radius:8px;display:flex;align-items:center;gap:8px;
+      color:#fef3ea;font-size:16px;font-weight:700;transition:background 0.2s;">
+    <span style="width:9px;height:9px;border-radius:50%;background:#e74c3c;
+      animation:pulse 1.5s infinite;display:inline-block;"></span>
+    <span id="t">00:00</span></div>
+    <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+      #box:hover{background:rgba(204,125,125,0.9)!important}</style>
+    <script>
+      const{ipcRenderer}=require('electron');
+      var st=${timerStartTime},el=document.getElementById('t');
+      setInterval(function(){var s=Math.floor((Date.now()-st)/1000);
+        el.textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');},200);
+      document.getElementById('box').addEventListener('click',function(){
+        document.getElementById('box').style.background='rgba(204,125,125,0.9)';
+        ipcRenderer.send('timer:stop');
+      });
+    </script></body></html>`);
+
+  timerWindow = new BrowserWindow({
+    x: area.x + 8, y: area.y + 8,
+    width: 140, height: 50,
+    transparent: true, frame: false,
+    alwaysOnTop: true, resizable: false,
+    skipTaskbar: true, focusable: true,
+    webPreferences: { nodeIntegration: true, contextIsolation: false }
+  });
+
+  timerWindow.loadFile(tmpHtml);
+  timerWindow.setAlwaysOnTop(true, 'screen-saver');
+
+  // 关闭计时器窗口也视为停止录制
+  timerWindow.on('closed', () => {
+    try { fs.unlinkSync(tmpHtml); } catch (e) {}
+    timerWindow = null;
+  });
+}
+
+function closeRecordingTimer() {
+  if (timerWindow && !timerWindow.isDestroyed()) {
+    timerWindow.close();
+    timerWindow = null;
+  }
+}
+
 // ===== IPC Handlers =====
 
 function setupIPC() {
@@ -127,8 +254,10 @@ function setupIPC() {
 
     const result = await createRegionSelector();
 
-    // 恢复主窗口
-    if (mainWindow) mainWindow.show();
+    // 用户取消则恢复窗口，否则留给后续截屏/录屏 handler 恢复
+    if (result.canceled) {
+      if (mainWindow) mainWindow.show();
+    }
 
     return result;
   });
@@ -136,21 +265,21 @@ function setupIPC() {
   // ---- 截屏 ----
   ipcMain.handle('screenshot:capture', async (_event, { mode, rect }) => {
     try {
+      // 无论什么模式，截屏前都确保窗口隐藏
+      if (mainWindow && mainWindow.isVisible()) mainWindow.hide();
+      await new Promise(r => setTimeout(r, 500));
+
       let result;
       if (mode === 'fullscreen') {
-        // 截屏前隐藏主窗口
-        if (mainWindow) mainWindow.hide();
-        await new Promise(r => setTimeout(r, 200));
-
         result = await screenshot.captureFullscreen();
-
-        if (mainWindow) mainWindow.show();
       } else if (mode === 'region' && rect) {
-        // 区域截屏（窗口已在区域选择时隐藏）
         result = await screenshot.captureRegion(rect);
       } else {
         throw new Error('无效的截屏模式');
       }
+
+      // 截完一定恢复窗口
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
 
       // 存入元数据
       const record = store.addFile({
@@ -286,6 +415,11 @@ function setupIPC() {
 
       const result = await recorder.startRecording(params);
 
+      // 录制范围边框 + 计时器（持续显示直到停止）
+      const recRect = params.mode === 'region' ? params.rect : null;
+      showRecordingBorder(recRect);
+      showRecordingTimer(recRect);
+
       if (mainWindow) mainWindow.show();
 
       return { success: true, filePath: result.filePath, fileName: result.fileName };
@@ -298,6 +432,8 @@ function setupIPC() {
 
   ipcMain.handle('recording:stop', async () => {
     try {
+      closeRecordingBorder();
+      closeRecordingTimer();
       const result = await recorder.stopRecording();
 
       const record = store.addFile({
@@ -316,6 +452,26 @@ function setupIPC() {
     } catch (err) {
       console.error('停止录制失败:', err);
       return { success: false, error: err.message };
+    }
+  });
+
+  // ---- 计时器点击停止 ----
+  ipcMain.on('timer:stop', async () => {
+    try {
+      closeRecordingBorder();
+      closeRecordingTimer();
+      const result = await recorder.stopRecording();
+      const record = store.addFile({
+        id: 'vid-' + Date.now(), type: 'video',
+        fileName: result.fileName, filePath: result.filePath,
+        duration: result.duration, createdAt: new Date().toISOString(),
+        isPinned: false, hasSubtitle: false, srtPath: null
+      });
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('recording:stoppedByTimer', record);
+      }
+    } catch (err) {
+      console.error('计时器停止失败:', err);
     }
   });
 

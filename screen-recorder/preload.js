@@ -50,5 +50,10 @@ contextBridge.exposeInMainWorld('api', {
 
   removeSubtitleListener: () => {
     ipcRenderer.removeAllListeners('subtitle:progress');
+  },
+
+  // 计时器停止录制事件
+  onTimerStop: (callback) => {
+    ipcRenderer.on('recording:stoppedByTimer', (_event, record) => callback(record));
   }
 });

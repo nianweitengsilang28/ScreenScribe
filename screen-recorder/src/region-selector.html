@@ -1,152 +1,255 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>区域选择</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 100vw; height: 100vh; overflow: hidden; cursor: crosshair;
+    user-select: none; background: transparent; font-family: "Microsoft YaHei", sans-serif;
+  }
 
-    body {
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden;
-      cursor: crosshair;
-      user-select: none;
-      background: transparent;
-    }
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+  }
 
-    /* 半透明遮罩 */
-    .overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.35);
-      pointer-events: none;
-    }
+  .selection {
+    position: fixed;
+    border: 2px dashed #cc7d7d;
+    background: rgba(254, 243, 234, 0.12);
+    display: none;
+    pointer-events: none;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+  }
 
-    /* 框选区域（挖空） */
-    .selection {
-      position: fixed;
-      border: 2px solid #cc7d7d;
-      background: rgba(254, 243, 234, 0.15);
-      display: none;
-      pointer-events: none;
-      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
-    }
+  /* 八个拖拽手柄 */
+  .handle {
+    position: fixed; display: none; pointer-events: auto;
+    z-index: 20;
+  }
+  .handle.nw, .handle.ne, .handle.sw, .handle.se {
+    width: 10px; height: 10px;
+    background: #cc7d7d;
+    border: 2px solid #fef3ea;
+    border-radius: 50%;
+  }
+  .handle.n, .handle.s { height: 6px; cursor: ns-resize; }
+  .handle.e, .handle.w { width: 6px; cursor: ew-resize; }
+  .handle.nw { cursor: nw-resize; } .handle.ne { cursor: ne-resize; }
+  .handle.sw { cursor: sw-resize; } .handle.se { cursor: se-resize; }
 
-    /* 提示文字 */
-    .hint {
-      position: fixed;
-      top: 16px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: #fef3ea;
-      font-family: "Microsoft YaHei", sans-serif;
-      font-size: 14px;
-      background: rgba(0,0,0,0.5);
-      padding: 8px 20px;
-      border-radius: 20px;
-      pointer-events: none;
-      z-index: 10;
-      backdrop-filter: blur(4px);
-    }
+  .size-label {
+    position: fixed; display: none;
+    background: rgba(0,0,0,0.75); color: #fef3ea;
+    font-family: Consolas, monospace; font-size: 12px;
+    padding: 3px 8px; border-radius: 6px;
+    pointer-events: none; white-space: nowrap;
+  }
 
-    /* 尺寸标签 */
-    .size-label {
-      position: fixed;
-      display: none;
-      background: rgba(0,0,0,0.7);
-      color: #fef3ea;
-      font-family: "Consolas", "Microsoft YaHei", monospace;
-      font-size: 12px;
-      padding: 4px 10px;
-      border-radius: 8px;
-      pointer-events: none;
-      white-space: nowrap;
-    }
-  </style>
+  /* 工具栏 */
+  .toolbar {
+    position: fixed; display: none; z-index: 30;
+    background: #fef3ea; border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2); overflow: hidden;
+  }
+  .toolbar button {
+    border: none; background: transparent;
+    font-size: 18px; padding: 8px 14px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .toolbar button:hover { background: #d8eef1; }
+  .toolbar .btn-confirm { color: #19645c; border-right: 1px solid #c4e4dd; }
+  .toolbar .btn-cancel { color: #cc7d7d; }
+
+  .hint {
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+    color: #fef3ea; font-size: 13px;
+    background: rgba(0,0,0,0.5); padding: 6px 18px;
+    border-radius: 20px; pointer-events: none; z-index: 10;
+    backdrop-filter: blur(4px);
+  }
+
+  .hint kbd {
+    background: rgba(255,255,255,0.2); padding: 1px 6px;
+    border-radius: 4px; font-family: Consolas, monospace; font-size: 11px;
+  }
+</style>
 </head>
 <body>
-  <div class="hint">🖱️ 拖拽框选截屏区域，按 <b>ESC</b> 取消</div>
-  <div class="overlay" id="overlay"></div>
-  <div class="selection" id="selection"></div>
-  <div class="size-label" id="sizeLabel"></div>
+<div class="hint" id="hint">🖱️ 拖拽框选区域，按 <kbd>ESC</kbd> 取消</div>
+<div class="overlay"></div>
+<div class="selection" id="sel"></div>
+<div class="size-label" id="lbl"></div>
 
-  <script>
-    const { ipcRenderer } = require('electron');
+<!-- 八个拖拽手柄 -->
+<div class="handle nw" id="hnw"></div>
+<div class="handle n"  id="hn"></div>
+<div class="handle ne" id="hne"></div>
+<div class="handle w"  id="hw"></div>
+<div class="handle e"  id="he"></div>
+<div class="handle sw" id="hsw"></div>
+<div class="handle s"  id="hs"></div>
+<div class="handle se" id="hse"></div>
 
-    const selection = document.getElementById('selection');
-    const sizeLabel = document.getElementById('sizeLabel');
-    const hint = document.querySelector('.hint');
+<div class="toolbar" id="toolbar">
+  <button class="btn-confirm" title="确认 (Enter)">✅</button>
+  <button class="btn-cancel"  title="取消 (Esc)">❌</button>
+</div>
 
-    let startX = 0, startY = 0;
-    let isDragging = false;
+<script>
+const { ipcRenderer } = require('electron');
 
-    document.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return; // 只响应左键
-      startX = e.screenX;
-      startY = e.screenY;
-      isDragging = true;
-      selection.style.display = 'block';
-      sizeLabel.style.display = 'block';
-      hint.style.display = 'none';
-      updateRect(e);
-    });
+const sel = document.getElementById('sel');
+const lbl = document.getElementById('lbl');
+const hint = document.getElementById('hint');
+const tb = document.getElementById('toolbar');
+const handles = {
+  nw: document.getElementById('hnw'), n: document.getElementById('hn'), ne: document.getElementById('hne'),
+  w:  document.getElementById('hw'),  e: document.getElementById('he'),
+  sw: document.getElementById('hsw'), s: document.getElementById('hs'), se: document.getElementById('hse'),
+};
 
-    document.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      updateRect(e);
-    });
+// 当前选中区域
+let rect = { x: 0, y: 0, w: 0, h: 0 };
+let confirmed = false;
 
-    document.addEventListener('mouseup', (e) => {
-      if (!isDragging) return;
-      isDragging = false;
+// 拖拽状态
+let dragging = false, resizing = false;
+let dragStart = { x: 0, y: 0 };
+let resizeDir = '';
+let initRect = {};
 
-      const x = Math.min(startX, e.screenX);
-      const y = Math.min(startY, e.screenY);
-      const w = Math.abs(e.screenX - startX);
-      const h = Math.abs(e.screenY - startY);
+function clamp(v, min, max) { return Math.max(min, Math.min(v, max)); }
 
-      // 框选太小（< 20px）视为无效
-      if (w < 20 || h < 20) {
-        resetSelection();
-        return;
-      }
+const screenW = window.screen.width;
+const screenH = window.screen.height;
 
-      // 发送选中区域给主进程
-      ipcRenderer.send('region:selected', { x, y, width: w, height: h });
-    });
+function updateUI() {
+  const r = rect;
+  sel.style.display = 'block';
+  sel.style.left = r.x + 'px';
+  sel.style.top = r.y + 'px';
+  sel.style.width = r.w + 'px';
+  sel.style.height = r.h + 'px';
 
-    function updateRect(e) {
-      const x = Math.min(startX, e.screenX);
-      const y = Math.min(startY, e.screenY);
-      const w = Math.abs(e.screenX - startX);
-      const h = Math.abs(e.screenY - startY);
+  // 尺寸标签（上方居中）
+  lbl.style.display = 'block';
+  lbl.style.left = (r.x + r.w / 2) + 'px';
+  lbl.style.top = Math.max(0, r.y - 28) + 'px';
+  lbl.style.transform = 'translate(-50%, 0)';
+  lbl.textContent = `${r.w} × ${r.h}`;
 
-      selection.style.left = x + 'px';
-      selection.style.top = y + 'px';
-      selection.style.width = w + 'px';
-      selection.style.height = h + 'px';
+  // 手柄位置
+  const hw = 5, hh = 5;
+  const positions = {
+    nw: [r.x - hw, r.y - hh],
+    n:  [r.x + r.w/2 - hw, r.y - hh],
+    ne: [r.x + r.w - hw, r.y - hh],
+    w:  [r.x - hw, r.y + r.h/2 - hh],
+    e:  [r.x + r.w - hw, r.y + r.h/2 - hh],
+    sw: [r.x - hw, r.y + r.h - hh],
+    s:  [r.x + r.w/2 - hw, r.y + r.h - hh],
+    se: [r.x + r.w - hw, r.y + r.h - hh],
+  };
+  for (const [k, [px, py]] of Object.entries(positions)) {
+    handles[k].style.display = 'block';
+    handles[k].style.left = px + 'px';
+    handles[k].style.top = py + 'px';
+  }
 
-      sizeLabel.style.left = (x + w / 2) + 'px';
-      sizeLabel.style.top = (y - 28) + 'px';
-      sizeLabel.style.transform = 'translate(-50%, 0)';
-      sizeLabel.textContent = `${w} × ${h}`;
-    }
+  // 工具栏（左上角外侧）
+  tb.style.display = 'flex';
+  tb.style.left = Math.max(0, r.x) + 'px';
+  tb.style.top = Math.max(0, r.y - 44) + 'px';
+}
 
-    function resetSelection() {
-      selection.style.display = 'none';
-      sizeLabel.style.display = 'none';
-      hint.style.display = 'block';
-      isDragging = false;
-    }
+function hideAll() {
+  sel.style.display = 'none';
+  lbl.style.display = 'none';
+  tb.style.display = 'none';
+  Object.values(handles).forEach(h => h.style.display = 'none');
+}
 
-    // ESC 取消
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        ipcRenderer.send('region:cancelled');
-      }
-    });
-  </script>
+function confirm() {
+  confirmed = true;
+  if (rect.w >= 20 && rect.h >= 20) {
+    ipcRenderer.send('region:selected', { x: rect.x, y: rect.y, width: rect.w, height: rect.h });
+  } else {
+    ipcRenderer.send('region:cancelled');
+  }
+}
+
+function cancel() {
+  ipcRenderer.send('region:cancelled');
+}
+
+// ====== 新建框选 ======
+document.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  if (confirmed) return;
+  if (e.target !== document.body) return; // 不拦截手柄点击
+
+  dragging = true;
+  dragStart = { x: e.screenX, y: e.screenY };
+  rect = { x: e.screenX, y: e.screenY, w: 0, h: 0 };
+  hint.style.display = 'none';
+  updateUI();
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (resizing) {
+    const dx = e.screenX - dragStart.x;
+    const dy = e.screenY - dragStart.y;
+    const r0 = initRect;
+
+    if (resizeDir.includes('e')) rect.w = clamp(r0.w + dx, 20, screenW - r0.x);
+    if (resizeDir.includes('w')) { rect.x = clamp(r0.x + dx, 0, r0.x + r0.w - 20); rect.w = r0.x + r0.w - rect.x; }
+    if (resizeDir.includes('s')) rect.h = clamp(r0.h + dy, 20, screenH - r0.y);
+    if (resizeDir.includes('n')) { rect.y = clamp(r0.y + dy, 0, r0.y + r0.h - 20); rect.h = r0.y + r0.h - rect.y; }
+    updateUI();
+    return;
+  }
+
+  if (!dragging) return;
+  const x = Math.min(dragStart.x, e.screenX);
+  const y = Math.min(dragStart.y, e.screenY);
+  rect = { x, y, w: Math.abs(e.screenX - dragStart.x), h: Math.abs(e.screenY - dragStart.y) };
+  updateUI();
+});
+
+document.addEventListener('mouseup', (e) => {
+  if (resizing) { resizing = false; return; }
+  if (!dragging) return;
+  dragging = false;
+  if (rect.w < 20 || rect.h < 20) { hideAll(); hint.style.display = 'block'; return; }
+  // 框选完成，进入调整模式
+  hint.style.display = 'none';
+  updateUI();
+});
+
+// ====== 手柄调整大小 ======
+Object.entries(handles).forEach(([dir, el]) => {
+  el.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    resizing = true;
+    resizeDir = dir;
+    dragStart = { x: e.screenX, y: e.screenY };
+    initRect = { ...rect };
+  });
+});
+
+// ====== 工具栏按钮 ======
+document.querySelector('.btn-confirm').addEventListener('click', confirm);
+document.querySelector('.btn-cancel').addEventListener('click', cancel);
+
+// ====== 键盘 ======
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') confirm();
+  if (e.key === 'Escape') cancel();
+});
+</script>
 </body>
 </html>

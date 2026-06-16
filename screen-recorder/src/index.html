@@ -168,6 +168,18 @@
     </div>
   </div>
 
+  <!-- ========== 全局加载遮罩 ========== -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <p class="loading-text" id="loadingText">加载中...</p>
+      <p class="loading-sub" id="loadingSub"></p>
+      <button class="btn-sm btn-danger" id="btnForceQuit" style="display:none; margin-top:12px;">
+        ⚠️ 强制关闭
+      </button>
+    </div>
+  </div>
+
   <script src="renderer.js"></script>
 </body>
 </html>

@@ -61,7 +61,12 @@ function buildArgs(params, outPath) {
     args.push('-filter_complex', '[1:a][2:a]amix=inputs=2:duration=first[a]');
   }
 
-  args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p');
+  args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+    '-pix_fmt', 'yuv420p',           // 兼容所有播放器
+    '-profile:v', 'baseline',        // 浏览器兼容
+    '-level', '3.1',                 // 1080p 级别
+    '-g', '60',                      // 每 2 秒一个关键帧
+    '-movflags', '+faststart');      // moov 前置，浏览器可流式播放
 
   if (ac > 0) {
     args.push('-c:a', 'aac', '-b:a', '128k');
@@ -110,7 +115,7 @@ function startRecording(params) {
 
     proc = spawn(exe, args, {
       windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe']  // stdin 必须 pipe 才能发 'q' 优雅退出
     });
 
     filePath = fp;
