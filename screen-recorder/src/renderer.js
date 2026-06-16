@@ -253,7 +253,10 @@ $('#btnScreenshot').addEventListener('click', async () => {
 });
 
 // ===== 录屏按钮 =====
+let recordingLock = false; // 防止连点
+
 $('#btnRecord').addEventListener('click', () => {
+  if (recordingLock) return; // 操作进行中，忽略
   if (!state.isRecording) {
     startRecording();
   } else {
@@ -262,15 +265,17 @@ $('#btnRecord').addEventListener('click', () => {
 });
 
 async function startRecording() {
+  recordingLock = true;
+
   // 区域模式：先框选
   let rect = null;
   if (state.mode === 'region') {
     const regionResult = await window.api.startRegionSelect();
-    if (regionResult.canceled) return;
+    if (regionResult.canceled) { recordingLock = false; return; }
     rect = regionResult.rect;
   }
 
-  // 启动 FFmpeg 录制（带音频参数）
+  // 启动 FFmpeg 录制
   const result = await window.api.startRecording({
     mode: state.mode,
     rect,
@@ -279,8 +284,10 @@ async function startRecording() {
     micDevice: state.micDevice,
     systemDevice: state.sysAudioDevice
   });
+
   if (!result.success) {
     alert('❌ 录制启动失败：' + result.error);
+    recordingLock = false;
     return;
   }
 
@@ -298,9 +305,13 @@ async function startRecording() {
     state.recordingSeconds++;
     updateTimerDisplay();
   }, 1000);
+
+  recordingLock = false;
 }
 
 async function stopRecording() {
+  recordingLock = true;
+
   const result = await window.api.stopRecording();
   if (!result.success) {
     alert('⚠️ 录制停止异常：' + result.error);
@@ -319,9 +330,11 @@ async function stopRecording() {
   state.recordingSeconds = 0;
   updateTimerDisplay();
 
-  // 刷新文件列表
+  // 刷新列表
   state.files = await window.api.getFiles(state.currentFilter);
   renderFileList();
+
+  recordingLock = false;
 }
 
 function updateTimerDisplay() {

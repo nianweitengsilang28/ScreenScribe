@@ -416,8 +416,7 @@ body {
 }
 
 .file-card.pinned {
-  border-left: 3px solid var(--color-primary);
-  padding-left: 13px;
+  /* 置顶仅通过 📌 emoji 表示，不用左边框 */
 }
 
 .file-icon {
@@ -465,13 +464,13 @@ body {
 
 .pin-icon {
   font-size: 14px;
-  opacity: 0.4;
   flex-shrink: 0;
+  width: 20px;
+  text-align: center;
 }
 
 .file-card.pinned .pin-icon {
-  opacity: 1;
-  color: var(--color-primary);
+  font-size: 16px;
 }
 
 .file-actions-trigger {

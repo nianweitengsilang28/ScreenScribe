@@ -284,7 +284,7 @@ function setupIPC() {
       if (mainWindow) mainWindow.hide();
       await new Promise(r => setTimeout(r, 300));
 
-      const result = recorder.startRecording(params);
+      const result = await recorder.startRecording(params);
 
       if (mainWindow) mainWindow.show();
 
